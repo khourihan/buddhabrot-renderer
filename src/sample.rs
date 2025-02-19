@@ -49,8 +49,8 @@ pub fn sample<T: Color + Clone + Copy + Send + Sync + 'static>(
 
             for i in 0..iters.div_ceil(cpus) {
                 // Generate a random complex number
-                let r1 = rng.gen_range(0f32..1f32) * 4.0 - 2.0;
-                let r2 = rng.gen_range(0f32..1f32) * 4.0 - 2.0;
+                let r1 = rng.gen::<f32>() * 4.0 - 2.0;
+                let r2 = rng.gen::<f32>() * 4.0 - 2.0;
 
                 // Transform random complex number into the specified frame
                 let c = Complex::new(r1, r2) * scale + center;
@@ -80,7 +80,7 @@ pub fn sample<T: Color + Clone + Copy + Send + Sync + 'static>(
                 }
             }
 
-            // Get a mutable reference to the main image, adding the thread-local iimage to it
+            // Get a mutable reference to the main image, adding the thread-local image to it
             let mut global_im = im.lock().unwrap();
             for (x, y, px) in subim.into_enumerate_pixels() {
                 global_im.add((x, y), px);
