@@ -12,7 +12,7 @@ impl<T> Complex<T> {
     pub fn new(re: T, im: T) -> Complex<T> {
         Self { re, im }
     }
-    
+
     /// Maps a function over the real and imaginary parts of a complex number.
     #[inline]
     pub fn map<F: Fn(T) -> U, U>(self, f: F) -> Complex<U> {
@@ -80,7 +80,9 @@ impl<T: Clone + Copy + Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output =
     }
 }
 
-impl<T: Clone + Copy + Div<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Mul<T, Output = T>> Div for Complex<T> {
+impl<T: Clone + Copy + Div<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Mul<T, Output = T>> Div
+    for Complex<T>
+{
     type Output = Self;
 
     /// Performs complex division on two complex numbers.
@@ -113,7 +115,6 @@ impl<T: Hypot> Complex<T> {
     }
 }
 
-
 pub trait Hypot {
     fn hypotenuse(self, rhs: Self) -> Self;
 }
@@ -129,7 +130,6 @@ impl Hypot for f64 {
         f64::hypot(self, rhs)
     }
 }
-
 
 macro_rules! impl_op_real {
     ($($op:tt, $fn:ident, $trait:ident);*) => {

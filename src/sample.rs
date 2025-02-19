@@ -1,26 +1,43 @@
-use rand::{Rng, thread_rng};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::{sync::{Arc, Mutex}, thread};
+use rand::{thread_rng, Rng};
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
 
-use crate::{color::{Color, ColorChannel}, complex::Complex, images::Image};
+use crate::{
+    color::{Color, ColorChannel},
+    complex::Complex,
+    images::Image,
+};
 
-
-pub fn sample<T: Color + Clone + Copy + Send + Sync + 'static>(im: Arc<Mutex<Image<T>>>, n: u32, m: u32, progress_update: usize) {
+pub fn sample<T: Color + Clone + Copy + Send + Sync + 'static>(
+    im: Arc<Mutex<Image<T>>>,
+    n: u32,
+    m: u32,
+    progress_update: usize,
+    scale: f32,
+    center: Complex<f32>,
+) {
     let cpus = num_cpus::get();
     let size = im.lock().unwrap().size;
     let width = im.lock().unwrap().width;
+    let height = size / width;
     let iters = size * m as usize;
     let thread_progress_up = progress_update / cpus;
 
     let multiprogress = MultiProgress::new();
-    let style = ProgressStyle::with_template("{spinner:.green} [{elapsed}] [{bar:50.white/blue}] {pos}/{len} ({eta})").unwrap().progress_chars("=> ").tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
+    let style = ProgressStyle::with_template("{spinner:.green} [{elapsed}] [{bar:50.white/blue}] {pos}/{len} ({eta})")
+        .unwrap()
+        .progress_chars("=> ")
+        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
     let bar = multiprogress.add(ProgressBar::new(iters as u64).with_style(style));
     bar.inc(0);
 
     let mut threads = Vec::new();
 
     for id in 0..cpus {
-        // Increment the Arc's reference count to move into each thread
+        // Increment the Arc's reference count and move into each thread
         let bar = bar.clone();
         let im = im.clone();
 
@@ -34,7 +51,9 @@ pub fn sample<T: Color + Clone + Copy + Send + Sync + 'static>(im: Arc<Mutex<Ima
                 // Generate a random complex number
                 let r1 = rng.gen_range(0f32..1f32) * 4.0 - 2.0;
                 let r2 = rng.gen_range(0f32..1f32) * 4.0 - 2.0;
-                let c = transform(Complex::new(r1, r2));
+
+                // Transform random complex number into the specified frame
+                let c = Complex::new(r1, r2) * scale + center;
 
                 // Calculate the path of this complex number over n iterations
                 let trajectory = mandelbrot(c, n);
@@ -42,16 +61,17 @@ pub fn sample<T: Color + Clone + Copy + Send + Sync + 'static>(im: Arc<Mutex<Ima
                 // Iterate through each point in the complex number's journey
                 for z in trajectory {
                     // Convert the complex number to pixel coordinates
-                    let p = transform_inverse(z) * 0.25 + 0.5;
-                    let px = Complex::new(p.re * width as f32, p.im * (size / width) as f32).map(|x| x as i32);
-                    
+                    let p = (z - center) / scale * 0.25 + 0.5;
+                    let px = (p.re * width as f32) as i32;
+                    let py = (p.im * height as f32) as i32;
+
                     // Ensure the complex number is inside the image
-                    if !is_inside(width, size, px.into()) {
+                    if px < 0 || py < 0 || px >= width as i32 || py >= height as i32 {
                         continue;
                     }
 
                     // Plot the pixel
-                    subim.add(px.map(|x| x as usize).into(), T::one(ColorChannel::Red));
+                    subim.add((px as usize, py as usize), T::one(ColorChannel::Red));
                 }
 
                 // Update the progress bar if needed
@@ -75,35 +95,61 @@ pub fn sample<T: Color + Clone + Copy + Send + Sync + 'static>(im: Arc<Mutex<Ima
     multiprogress.clear().unwrap();
 }
 
-
-#[inline]
-fn transform(c: Complex<f32>) -> Complex<f32> {
-    c
-}
-
-#[inline]
-fn transform_inverse(c: Complex<f32>) -> Complex<f32> {
-    c
-}
-
-#[inline]
-pub fn is_inside(width: usize, size: usize, px: (i32, i32)) -> bool {
-    (px.0 >= 0) && (px.1 >= 0) && (px.0 < width as i32) && (px.1 < (size / width) as i32)
-}
-
 fn mandelbrot(c: Complex<f32>, n: u32) -> Vec<Complex<f32>> {
-    let mut z = c;
+    let mut z_re = c.re;
+    let mut z_im = c.im;
+
+    let mut z_re_2 = z_re * z_re;
+    let mut z_im_2 = z_im * z_im;
+
     let mut sequence = Vec::new();
 
     for _ in 0..n {
-        sequence.push(z);
-        // Update z using the Mandelbrot set formula: z = z^2 + c
-        z = z * z + c;
-        // If z escapes the Mandelbrot set, return the sequence
-        if z.abs() > 2.0 { 
+        sequence.push(Complex::new(z_re, z_im));
+
+        // Update `z` via the Mandelbrot function:
+        // z = z² + c
+        //
+        // By some algebriac simplification this reduces down to:
+        // y = Im(z² + c)
+        //   = Im(x² - y² + 2ixy + x₀ + iy₀)  <-- Because we only want imaginary component, we only
+        //                  ^^^^        ^^^       care about terms with `i` in them.
+        //   = 2xy + y₀
+        //
+        // x = Re(z² + c)
+        //   = Re(x² - y² + 2ixy + x₀ + iy₀)  <-- Because we only want real component, we only
+        //        ^^^^^^^          ^^             care about terms without `i` in them.
+        //   = x² - y² + x₀
+        //
+        // where:
+        // z = x + iy
+        // z² = (x² + iy²) = x² - y² + 2ixy
+        // c = x₀ + y₀
+        z_im = 2.0 * z_re * z_im + c.im;
+        z_re = z_re_2 - z_im_2 + c.re;
+
+        // Update cached squares of z_re and z_im.
+        z_re_2 = z_re * z_re;
+        z_im_2 = z_im * z_im;
+
+        // Compute the square of the absolute value (magnitude) of `z`.
+        // This is equivalent to square of its distance from the origin.
+        // This is faster than computing just the magnitude because we remove the need for a sqrt()
+        // which is incredibly slow in comparison to addition and multiplication.
+        // Here, the squared magnitude is computed via the pythagorean theorem, a² + b² = c²
+        // where a = z_re, b = z_im, and c = z_mag.
+        let z_mag_2 = z_re_2 + z_im_2;
+
+        // If `z` escapes the set, exit.
+        // Since we are now testing the square of `z_mag`, we also make sure we square the opposite
+        // side of the inequality (2² = 4).
+        // z_mag > 2
+        // z_mag² > 2²
+        if z_mag_2 > 4.0 {
             return sequence;
-         }
+        }
     }
+
     // If the loop completes without escaping, return an empty vector
     Vec::new()
 }

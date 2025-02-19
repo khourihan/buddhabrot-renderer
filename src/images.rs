@@ -1,4 +1,7 @@
-use std::{slice::{Iter, IterMut}, vec::IntoIter};
+use std::{
+    slice::{Iter, IterMut},
+    vec::IntoIter,
+};
 
 use crate::color::Color;
 
@@ -13,13 +16,21 @@ impl<T: Color + Clone + Copy> Image<T> {
     /// Creates a new, blank image.
     #[inline]
     pub fn new(size: usize, width: usize) -> Image<T> {
-        Self { data: vec![T::empty(); size], size, width }
+        Self {
+            data: vec![T::empty(); size],
+            size,
+            width,
+        }
     }
 
     /// Creates a new image with all pixels set to `col`.
     #[inline]
     pub fn new_fill(size: usize, width: usize, col: T) -> Image<T> {
-        Self { data: vec![col; size], size, width }
+        Self {
+            data: vec![col; size],
+            size,
+            width,
+        }
     }
 
     /// Gets the value of a pixel at a given `(x, y)` pixel position.
@@ -55,22 +66,39 @@ impl<T: Color + Clone + Copy> Image<T> {
     /// Get a mutable iterator over every pixel in the image.
     #[inline]
     pub fn pixels_mut(&mut self) -> PixelsMut<T> {
-        PixelsMut { iter: self.data.iter_mut() }
+        PixelsMut {
+            iter: self.data.iter_mut(),
+        }
     }
 
     #[inline]
     pub fn enumerate_pixels(&self) -> EnumeratePixels<T> {
-        EnumeratePixels { iter: self.data.iter(), index: 0, size: self.size, width: self.width }
+        EnumeratePixels {
+            iter: self.data.iter(),
+            index: 0,
+            size: self.size,
+            width: self.width,
+        }
     }
 
     #[inline]
     pub fn into_enumerate_pixels(self) -> IntoEnumeratePixels<T> {
-        IntoEnumeratePixels { iter: self.data.into_iter(), index: 0, size: self.size, width: self.width }
+        IntoEnumeratePixels {
+            iter: self.data.into_iter(),
+            index: 0,
+            size: self.size,
+            width: self.width,
+        }
     }
 
     #[inline]
     pub fn enumerate_pixels_mut(&mut self) -> EnumeratePixelsMut<T> {
-        EnumeratePixelsMut { iter: self.data.iter_mut(), index: 0, size: self.size, width: self.width }
+        EnumeratePixelsMut {
+            iter: self.data.iter_mut(),
+            index: 0,
+            size: self.size,
+            width: self.width,
+        }
     }
 }
 
@@ -79,7 +107,6 @@ impl<T: Color + Clone + Copy> Default for Image<T> {
         Self::new(0, 0)
     }
 }
-
 
 pub struct Pixels<'a, T: Color> {
     iter: Iter<'a, T>,
@@ -105,7 +132,6 @@ impl<'a, T: Color> Iterator for PixelsMut<'a, T> {
     }
 }
 
-
 pub struct IntoEnumeratePixels<T: Color> {
     size: usize,
     width: usize,
@@ -122,10 +148,13 @@ impl<T: Color> Iterator for IntoEnumeratePixels<T> {
         }
         self.index += 1;
 
-        Some(((self.index - 1) % self.width, (self.index - 1) / self.width, self.iter.next()?))
+        Some((
+            (self.index - 1) % self.width,
+            (self.index - 1) / self.width,
+            self.iter.next()?,
+        ))
     }
 }
-
 
 pub struct EnumeratePixels<'a, T: Color> {
     size: usize,
@@ -143,10 +172,13 @@ impl<'a, T: Color> Iterator for EnumeratePixels<'a, T> {
         }
         self.index += 1;
 
-        Some(((self.index - 1) % self.width, (self.index - 1) / self.width, self.iter.next()?))
+        Some((
+            (self.index - 1) % self.width,
+            (self.index - 1) / self.width,
+            self.iter.next()?,
+        ))
     }
 }
-
 
 pub struct EnumeratePixelsMut<'a, T: Color> {
     size: usize,
@@ -164,6 +196,10 @@ impl<'a, T: Color> Iterator for EnumeratePixelsMut<'a, T> {
         }
         self.index += 1;
 
-        Some(((self.index - 1) % self.width, (self.index - 1) / self.width, self.iter.next()?))
+        Some((
+            (self.index - 1) % self.width,
+            (self.index - 1) / self.width,
+            self.iter.next()?,
+        ))
     }
 }
